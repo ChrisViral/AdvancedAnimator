@@ -16,8 +16,6 @@ namespace AdvancedAnimator
         [KSPField]
         public string guiDisableName = string.Empty;
         [KSPField]
-        public string guiToggleName = string.Empty;
-        [KSPField]
         public string actionEnableName = string.Empty;
         [KSPField]
         public string actionDisableName = string.Empty;
@@ -37,24 +35,22 @@ namespace AdvancedAnimator
         public float unfocusedRange = 5f;
         [KSPField(isPersistant = true)]
         public bool enabled = false;
+        [KSPField(isPersistant = true)]
+        public bool played = true;
+        [KSPField(guiActive = true, guiName = "Status")]
+        public string status = "Enable";
+        #endregion
+
+        #region Fields
+        private bool initiated = false;
         #endregion
 
         #region Part GUI
         [KSPEvent(active = true, guiActive = true, guiActiveEditor = true, guiActiveUnfocused = true, guiName = "Toggle", unfocusedRange = 5)]
         public void GUIToggle()
         {
-            if (this.enabled)
-            {
-                if (CheckAnimationPlaying()) { PlayAnimation(-this.animationSpeed, GetAnimationTime()); }
-                else { PlayAnimation(-this.animationSpeed, 1); }
-                this.enabled = false;
-            }
-            else
-            {
-                if (CheckAnimationPlaying()) { PlayAnimation(this.animationSpeed, GetAnimationTime()); }
-                else { PlayAnimation(this.animationSpeed, 0); }
-                this.enabled = true;
-            }
+            if (this.enabled) { Disable(); }
+            else { Enable(); }
         }
         #endregion
 
@@ -62,17 +58,13 @@ namespace AdvancedAnimator
         [KSPAction("Enable")]
         public void ActionEnable(KSPActionParam param)
         {
-            if (CheckAnimationPlaying()) { PlayAnimation(-this.animationSpeed, GetAnimationTime()); }
-            else { PlayAnimation(-this.animationSpeed, 1); }
-            this.enabled = false;
+            Enable();
         }
 
         [KSPAction("Disable")]
         public void ActionDisable(KSPActionParam param)
         {
-            if (CheckAnimationPlaying()) { PlayAnimation(this.animationSpeed, GetAnimationTime()); }
-            else { PlayAnimation(this.animationSpeed, 1); }
-            this.enabled = true;
+            Disable();
         }
 
         [KSPAction("Toggle")]
@@ -83,7 +75,40 @@ namespace AdvancedAnimator
         #endregion
 
         #region Methods
-        public void InitiateAnimation()
+        private void Enable()
+        {
+            if (HighLogic.LoadedSceneIsFlight)
+            {
+                if (this.oneShot && this.played) { return; }
+                this.played = true;
+            }
+            if (CheckAnimationPlaying()) { PlayAnimation(this.animationSpeed, GetAnimationTime()); }
+            else { PlayAnimation(this.animationSpeed, 0); }
+            this.enabled = true;
+            SetName();
+        }
+
+        private void Disable()
+        {
+            if (HighLogic.LoadedSceneIsFlight)
+            {
+                if (this.oneShot && this.played) { return; }
+                this.played = true;
+            }
+            if (CheckAnimationPlaying()) { PlayAnimation(-this.animationSpeed, GetAnimationTime()); }
+            else { PlayAnimation(-this.animationSpeed, 1); }
+            Events["GUIToggle"].guiName = guiDisableName;
+            this.enabled = false;
+            SetName();
+        }
+
+        private void SetName()
+        {
+            BaseEvent toggle = Events["GUIToggle"];
+            if (!string.IsNullOrEmpty(this.guiEnableName) && !string.IsNullOrEmpty(this.guiDisableName)) { toggle.guiName = this.enabled ? this.guiDisableName : this.guiEnableName; }
+        }
+
+        private void InitiateAnimation()
         {
             foreach (Animation animation in this.part.FindModelAnimators(this.animationName))
             {
@@ -95,9 +120,10 @@ namespace AdvancedAnimator
                 state.layer = 1;
                 animation.Play(this.animationName);
             }
+            this.initiated = true;
         }
 
-        public void PlayAnimation(float animationSpeed, float animationTime)
+        private void PlayAnimation(float animationSpeed, float animationTime)
         {
             //Plays the animation
             foreach (Animation animation in this.part.FindModelAnimators(this.animationName))
@@ -111,7 +137,7 @@ namespace AdvancedAnimator
             }
         }
 
-        public bool CheckAnimationPlaying()
+        private bool CheckAnimationPlaying()
         {
             //Checks if a given animation is playing
             foreach (Animation animation in this.part.FindModelAnimators(this.animationName))
@@ -121,13 +147,47 @@ namespace AdvancedAnimator
             return false;
         }
 
-        public float GetAnimationTime()
+        private float GetAnimationTime()
         {
             foreach (Animation animation in this.part.FindModelAnimators(this.animationName))
             {
                 return animation[this.animationName].normalizedTime;
             }
             return 0f;
+        }
+        #endregion
+
+        #region Functions
+        private void Update()
+        {
+            if (!HighLogic.LoadedSceneIsFlight) { return; }
+            if (CheckAnimationPlaying())
+            {
+                if (this.enabled) { this.status = "Deploying..."; }
+                else { this.status = "Retracting..."; }
+            }
+            else
+            {
+                if (this.oneShot && this.played) { this.status = "Locked."; }
+                else
+                {
+                    if (this.enabled) { this.status = "Deployed"; }
+                    else { this.status = "Retracted"; }
+                }
+            }
+        }
+
+        private void LateUpdate()
+        {
+            if (!HighLogic.LoadedSceneIsFlight) { return; }
+            if (this.initiated)
+            {
+                foreach (Animation animation in this.part.FindModelAnimators(animationName))
+                {
+                    animation.Stop(animationName);
+                }
+                this.initiated = false;
+            }
         }
         #endregion
 
@@ -144,32 +204,18 @@ namespace AdvancedAnimator
                 return;
             }
 
-            else
-            {
-                foreach (BaseEvent e in Events)
-                {
-                    e.guiActiveEditor = this.activeEditor;
-                    e.guiActive = this.activeFlight;
-                    e.guiActiveUnfocused = this.activeUnfocused;
-                    e.unfocusedRange = this.unfocusedRange;
-                }
-            }
-
             //Initiates the animation
             InitiateAnimation();
 
             //Sets the action groups/part GUI
-            BaseEvent enable = Events["GUIEnable"], disable = Events["GUIDisable"], toggle = Events["GUIToggle"];
+            BaseEvent  toggle = Events["GUIToggle"];
             BaseAction aEnable = Actions["ActionEnable"], aDisable = Actions["ActionDisable"], aToggle = Actions["ActionToggle"];
 
-            if (string.IsNullOrEmpty(this.guiEnableName)) { enable.active = false; }
-            else { enable.guiName = this.guiEnableName; }
-
-            if (string.IsNullOrEmpty(this.guiDisableName)) { disable.active = false; }
-            else { disable.guiName = this.guiDisableName; }
-
-            if (string.IsNullOrEmpty(this.guiToggleName)) { toggle.active = false; }
-            else { toggle.guiName = this.guiToggleName; }
+            toggle.guiActiveEditor = this.activeEditor;
+            toggle.guiActive = this.activeFlight;
+            toggle.guiActiveUnfocused = this.activeUnfocused;
+            toggle.unfocusedRange = this.unfocusedRange;
+            SetName();
 
             if (string.IsNullOrEmpty(this.actionEnableName)) { aEnable.active = false; }
             else { aEnable.guiName = this.actionEnableName; }
