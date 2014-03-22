@@ -26,11 +26,11 @@ namespace AdvancedAnimator
         [KSPField]
         public bool oneShot = false;
         [KSPField]
-        public bool activeEditor = false;
+        public bool activeEditor = true;
         [KSPField]
-        public bool activeFlight = false;
+        public bool activeFlight = true;
         [KSPField]
-        public bool activeUnfocused = false;
+        public bool activeUnfocused = true;
         [KSPField]
         public float unfocusedRange = 5f;
         [KSPField(isPersistant = true)]
@@ -46,7 +46,7 @@ namespace AdvancedAnimator
         #endregion
 
         #region Part GUI
-        [KSPEvent(active = true, guiActive = true, guiActiveEditor = true, guiActiveUnfocused = true, guiName = "Toggle", unfocusedRange = 5)]
+        [KSPEvent(active = true, guiActive = true, guiActiveEditor = true, guiActiveUnfocused = true, externalToEVAOnly = true, guiName = "Toggle", unfocusedRange = 5)]
         public void GUIToggle()
         {
             if (this.enabled) { Disable(); }
