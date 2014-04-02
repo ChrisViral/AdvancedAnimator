@@ -85,6 +85,7 @@ namespace AdvancedAnimator
             if (CheckAnimationPlaying()) { PlayAnimation(this.animationSpeed, GetAnimationTime()); }
             else { PlayAnimation(this.animationSpeed, 0); }
             this.enabled = true;
+            this.part.Effect("onAnimationDeploy");
             SetName();
         }
 
@@ -99,6 +100,7 @@ namespace AdvancedAnimator
             else { PlayAnimation(-this.animationSpeed, 1); }
             Events["GUIToggle"].guiName = guiDisableName;
             this.enabled = false;
+            this.part.Effect("onAnimationRetract");
             SetName();
         }
 
